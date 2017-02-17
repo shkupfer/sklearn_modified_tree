@@ -1699,10 +1699,10 @@ struct __pyx_vtabstruct_7sklearn_4tree_5_tree_Tree {
   PyArrayObject *(*_get_node_ndarray)(struct __pyx_obj_7sklearn_4tree_5_tree_Tree *);
   PyArrayObject *(*predict)(struct __pyx_obj_7sklearn_4tree_5_tree_Tree *, PyObject *, int __pyx_skip_dispatch);
   PyObject *(*predict_new)(struct __pyx_obj_7sklearn_4tree_5_tree_Tree *, PyObject *, int __pyx_skip_dispatch);
-  PyObject *(*apply)(struct __pyx_obj_7sklearn_4tree_5_tree_Tree *, PyObject *, int __pyx_skip_dispatch);
-  PyArrayObject *(*apply_old)(struct __pyx_obj_7sklearn_4tree_5_tree_Tree *, PyObject *, int __pyx_skip_dispatch);
-  PyObject *(*_apply_dense)(struct __pyx_obj_7sklearn_4tree_5_tree_Tree *, PyObject *);
-  PyArrayObject *(*_apply_dense_old)(struct __pyx_obj_7sklearn_4tree_5_tree_Tree *, PyObject *);
+  PyObject *(*apply_new)(struct __pyx_obj_7sklearn_4tree_5_tree_Tree *, PyObject *, int __pyx_skip_dispatch);
+  PyArrayObject *(*apply)(struct __pyx_obj_7sklearn_4tree_5_tree_Tree *, PyObject *, int __pyx_skip_dispatch);
+  PyObject *(*_apply_dense_new)(struct __pyx_obj_7sklearn_4tree_5_tree_Tree *, PyObject *);
+  PyArrayObject *(*_apply_dense)(struct __pyx_obj_7sklearn_4tree_5_tree_Tree *, PyObject *);
   PyArrayObject *(*_apply_sparse_csr)(struct __pyx_obj_7sklearn_4tree_5_tree_Tree *, PyObject *);
   PyObject *(*decision_path)(struct __pyx_obj_7sklearn_4tree_5_tree_Tree *, PyObject *, int __pyx_skip_dispatch);
   PyObject *(*_decision_path_dense)(struct __pyx_obj_7sklearn_4tree_5_tree_Tree *, PyObject *);

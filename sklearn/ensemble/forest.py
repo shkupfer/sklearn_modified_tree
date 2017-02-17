@@ -701,7 +701,7 @@ class ForestRegressor(six.with_metaclass(ABCMeta, BaseForest, RegressorMixin)):
         for estimator in self.estimators_:
             unsampled_indices = _generate_unsampled_indices(
                 estimator.random_state, n_samples)
-            p_estimator = estimator.predict(
+            p_estimator = estimator.predict_new(
                 X[unsampled_indices, :], check_input=False)[1]
 
             if self.n_outputs_ == 1:

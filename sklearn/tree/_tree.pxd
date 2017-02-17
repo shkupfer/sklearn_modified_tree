@@ -70,10 +70,10 @@ cdef class Tree:
     cpdef np.ndarray predict(self, object X)
     cpdef tuple predict_new(self, object X)
 
-    cpdef tuple apply(self, object X)
-    cpdef np.ndarray apply_old(self, object X)
-    cdef tuple _apply_dense(self, object X)
-    cdef np.ndarray _apply_dense_old(self, object X)
+    cpdef tuple apply_new(self, object X)
+    cpdef np.ndarray apply(self, object X)
+    cdef tuple _apply_dense_new(self, object X)
+    cdef np.ndarray _apply_dense(self, object X)
     cdef np.ndarray _apply_sparse_csr(self, object X)
 
     cpdef object decision_path(self, object X)

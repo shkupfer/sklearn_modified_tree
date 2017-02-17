@@ -715,6 +715,8 @@ cdef class Tree:
 
         Returns (size_t)(-1) on error.
         """
+        with gil:
+            print("self.node_count at top of _add_node: {0}".format(self.node_count))
         cdef SIZE_t node_id = self.node_count
 
         if node_id >= self.capacity:
@@ -756,7 +758,7 @@ cdef class Tree:
     cpdef np.ndarray predict(self, object X):
         """Predict target for X."""
         print("Top of predict in _tree.pyx")
-        out = self._get_value_ndarray().take(self.apply_old(X), axis=0,
+        out = self._get_value_ndarray().take(self.apply(X), axis=0,
                                              mode='clip')
         print("Before if self.n_outputs == 1")
         if self.n_outputs == 1:
@@ -764,23 +766,24 @@ cdef class Tree:
             out = out.reshape(X.shape[0], self.max_n_classes)
         return out
 
-    cpdef tuple apply(self, object X):
+    cpdef tuple apply_new(self, object X):
+        """Finds the terminal region (=leaf node) for each sample in X."""
+        if issparse(X):
+            return self._apply_sparse_csr(X)
+        else:
+            return self._apply_dense_new(X)
+
+    cpdef np.ndarray apply(self, object X):
+        print("At top of apply")
         """Finds the terminal region (=leaf node) for each sample in X."""
         if issparse(X):
             return self._apply_sparse_csr(X)
         else:
             return self._apply_dense(X)
 
-    cpdef np.ndarray apply_old(self, object X):
+    cdef inline np.ndarray _apply_dense(self, object X):
         """Finds the terminal region (=leaf node) for each sample in X."""
-        if issparse(X):
-            return self._apply_sparse_csr(X)
-        else:
-            return self._apply_dense_old(X)
-
-    cdef inline np.ndarray _apply_dense_old(self, object X):
-        """Finds the terminal region (=leaf node) for each sample in X."""
-        print("At top of _apply_dense_old. X:{0}".format(X))
+        print("At top of _apply_dense. X:{0}".format(X))
         print("X shape:{0}".format(X.shape))
         # Check input
         if not isinstance(X, np.ndarray):
@@ -805,21 +808,39 @@ cdef class Tree:
         cdef Node* node = NULL
         cdef SIZE_t i = 0
 
+        print("X_ndarray before looping through samples: {0}".format(X_ndarray))
         with nogil:
             for i in range(n_samples):
                 with gil:
                     print("sample {0}".format(i))
                 node = self.nodes
                 # While node not a leaf
+                with gil:
+                    print("about to check if node is not a leaf")
                 while node.left_child != _TREE_LEAF:
                     # ... and node.right_child != _TREE_LEAF:
+                    with gil:
+                        print("node is not a leaf, about to check X_ptr to see if this sample's feature is <= threshold")
                     if X_ptr[X_sample_stride * i +
                              X_fx_stride * node.feature] <= node.threshold:
+                        with gil:
+                            print("value is less than threshold")
+                            print("node.left_child: {0}".format(node.left_child))
+                            print("self.nodes[node.left_child]: {0}".format(self.nodes[node.left_child]))
+                            # print("&self.nodes[node.left_child]: {0}".format(&self.nodes[node.left_child]))
                         node = &self.nodes[node.left_child]
                     else:
+                        with gil:
+                            print("value is greater than threshold")
+                            print("node.right_child: {0}".format(node.right_child))
+                            print("self.nodes[node.right_child]: {0}".format(self.nodes[node.right_child]))
+                            # print("&self.nodes[node.right_child]: {0}".format(&self.nodes[node.right_child]))
                         node = &self.nodes[node.right_child]
-
+                with gil:
+                    print("About to assign {0} to out_ptr for sample {1}".format(<SIZE_t>(node - self.nodes), i))
                 out_ptr[i] = <SIZE_t>(node - self.nodes)  # node offset
+                with gil:
+                    print("Just assigned {0} to out_ptr for sample {1}".format(<SIZE_t>(node - self.nodes), i))
 
         return out
 
@@ -828,11 +849,11 @@ cdef class Tree:
         if issparse(X):
             return self._apply_sparse_csr(X)
         else:
-            return self._apply_dense(X)
+            return self._apply_dense_new(X)
 
-    cdef inline tuple _apply_dense(self, object X):
+    cdef inline tuple _apply_dense_new(self, object X):
         """Finds the terminal region (=leaf node) for each sample in X."""
-
+        print("At top of _apply_dense_new")
         # Check input
         if not isinstance(X, np.ndarray):
             raise ValueError("X should be in np.ndarray format, got %s"
@@ -844,18 +865,19 @@ cdef class Tree:
         # cdef tuple output_tuple(np.ndarray, np.ndarray)
 
         cdef np.ndarray node_value_array = self._get_value_ndarray()
+        print("_get_value_ndarray(): {0}".format(self._get_value_ndarray()))
         cdef DOUBLE_t* node_value_array_ptr = <DOUBLE_t*> node_value_array.data
         cdef SIZE_t node_value_array_node_stride = <SIZE_t> node_value_array.strides[0] / <SIZE_t> node_value_array.itemsize
         cdef SIZE_t node_value_array_value_stride = <SIZE_t> node_value_array.strides[2] / <SIZE_t> node_value_array.itemsize
         # print("node_value_array dtype: {0}".format(node_value_array.dtype))
 
-        cdef np.ndarray[DTYPE_t] node_values = np.zeros((self.node_count, ), dtype=np.float32)
-        cdef DTYPE_t* node_values_ptr = <DTYPE_t*> node_values.data
-        cdef SIZE_t node_values_stride = <SIZE_t> node_values.strides[0] / <SIZE_t> node_values.itemsize
+        # cdef np.ndarray[DTYPE_t] node_values = np.zeros((self.node_count, ), dtype=np.float32)
+        # cdef DTYPE_t* node_values_ptr = <DTYPE_t*> node_values.data
+        # cdef SIZE_t node_values_stride = <SIZE_t> node_values.strides[0] / <SIZE_t> node_values.itemsize
 
         # print("got through node_value variable defs")
 
-        for nodeid in range(self.node_count):
+        # for nodeid in range(self.node_count):
             # print("nodeid type: %s" % type(nodeid))
             # print("node_values_stride type: %s" % type(node_values_stride))
             # print("node_value_array_node_stride type: %s" % type(node_value_array_node_stride))
@@ -866,13 +888,14 @@ cdef class Tree:
             # print("node_values value numerator: %s" % str(node_value_array[nodeid][0][1]))
             # print("node_values_ptr value denominator: %s" % str(node_value_array_ptr[nodeid * node_value_array_node_stride] + node_value_array_ptr[nodeid * node_value_array_node_stride + node_value_array_value_stride]))
             # print("node_values value denominator: %s" % str(node_value_array[nodeid][0][1] + node_value_array[nodeid][0][0]))
-            node_values_ptr[nodeid * node_values_stride] = <DTYPE_t> node_value_array_ptr[nodeid * node_value_array_node_stride + node_value_array_value_stride] / <DTYPE_t> (node_value_array_ptr[nodeid * node_value_array_node_stride] + node_value_array_ptr[nodeid * node_value_array_node_stride + node_value_array_value_stride])
+            # node_values_ptr[nodeid * node_values_stride] = <DTYPE_t> node_value_array_ptr[nodeid * node_value_array_node_stride + node_value_array_value_stride] / <DTYPE_t> (node_value_array_ptr[nodeid * node_value_array_node_stride] + node_value_array_ptr[nodeid * node_value_array_node_stride + node_value_array_value_stride])
             # print("assigned this value: %s to node_values_ptr" % node_values_ptr[nodeid * node_values_stride])
 
             # print("node_values assigned value numerator: %s" % str(<DTYPE_t> node_value_array[nodeid][0][1]))
             # print("node_values_ptr assigned value denominator: %s" % str(<DTYPE_t> node_value_array[nodeid][0][1] + <DTYPE_t> node_value_array[nodeid][0][0]))
             # node_values[nodeid] = node_value_array[nodeid][0][1] / (node_value_array[nodeid][0][1] + node_value_array[nodeid][0][0])
             # print("assigned this value: %s to node_values_ptr" % node_values[nodeid])
+        # print("node_values: {0}".format(node_values))
 
         # print("got through assigning to node_values_ptr")
 
@@ -926,7 +949,7 @@ cdef class Tree:
                 #     print("node_values_stride type:")
                 #     print(type(node_values_stride))
                 # this_node_val = node_values_ptr[<SIZE_t> (node.node_id * node_values_stride)]
-                this_node_val = node_values_ptr[node.node_id * node_values_stride]
+                this_node_val = node_value_array_ptr[node.node_id * node_value_array_node_stride]
                 this_node_feat = node.feature
                 while node.left_child != _TREE_LEAF:
                     # ... and node.right_child != _TREE_LEAF:
@@ -942,20 +965,22 @@ cdef class Tree:
                         # with gil:
                             # print("sample {2}, node {0} (feature {1}, threshold: {3}) went right".format(node.node_id, node.feature, i, node.threshold))
                         node = &self.nodes[node.right_child]
-                    # feature_contributions[this_node_feat] += node_values_ptr[<SIZE_t> (node.node_id * node_values_stride)] - this_node_val
+                    # feature_contributions[this_node_feat] += node_value_array_ptr[<SIZE_t> (node.node_id * node_values_stride)] - this_node_val
                     # with gil:
                         # print("sample {0}, feature {1}, difference in prediction: {2}".format(i, node.feature, node_values[node.node_id] - this_node_val))
                         # print("this_node_feat: {0}".format(this_node_feat))
                         # feature_contributions[i][this_node_feat] += node_values[node.node_id] - this_node_val
-                    feature_contributions_ptr[i * fc_sample_stride + this_node_feat * fc_feature_stride] += node_values[node.node_id] - this_node_val
+                    feature_contributions_ptr[i * fc_sample_stride + this_node_feat * fc_feature_stride] += node_value_array_ptr[node.node_id * node_value_array_node_stride] - this_node_val
                     # this_node_val = node_values[node.node_id]
-                    this_node_val = node_values_ptr[node.node_id * node_values_stride]
+                    this_node_val = node_value_array_ptr[node.node_id * node_value_array_node_stride]
                     this_node_feat = node.feature
                 # with gil:
                     # print("leaf node with id %s: value=%s" % (node.node_id, this_node_val))
                 # tree_predictions[i] = this_node_val
 
-                out_ptr[i] = <SIZE_t>(node - self.nodes)  # node offset
+                out_ptr[i] = <SIZE_t>node_value_array_ptr[node.node_id * node_value_array_node_stride]
+                # with gil:
+                    # print("node_values_ptr current node: {0}".format(node_values_ptr[node.node_id * node_values_stride]))
             # with gil:
                 # print("student_feature_counts: %s" % student_feature_counts)
                 # print("feature_contributions: %s" % feature_contributions)
@@ -966,7 +991,8 @@ cdef class Tree:
         # output_array[1] = feature_contributions_with_pointer
         # return output_array
         # print("seed node values: {0}".format(node_values[0]))
-        return feature_contributions_with_pointer, out, node_values[0]  # i think i need this to return node_value_array[0][0], which is np.ndarray([didnt_persist, did_persist]), so i can properly get the average persistence % later
+        print("out in predict_new: {0}".format(out))
+        return feature_contributions_with_pointer, out, node_value_array_ptr[0]  # i think i need this to return node_value_array[0][0], which is np.ndarray([didnt_persist, did_persist]), so i can properly get the average persistence % later
 
     cdef inline np.ndarray _apply_sparse_csr(self, object X):
         """Finds the terminal region (=leaf node) for each sample in sparse X.
@@ -1249,6 +1275,7 @@ cdef class Tree:
         The array keeps a reference to this Tree, which manages the underlying
         memory.
         """
+        print("At top of _get_value_ndarray")
         cdef np.npy_intp shape[3]
         shape[0] = <np.npy_intp> self.node_count
         shape[1] = <np.npy_intp> self.n_outputs
@@ -1257,6 +1284,7 @@ cdef class Tree:
         arr = np.PyArray_SimpleNewFromData(3, shape, np.NPY_DOUBLE, self.value)
         Py_INCREF(self)
         arr.base = <PyObject*> self
+        print("At bottom of _get_value_ndarray")
         return arr
 
     cdef np.ndarray _get_node_ndarray(self):
